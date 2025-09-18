@@ -1,16 +1,14 @@
 import { useEffect, useState } from "react";
 import { Card, List, Pagination, Spin, message, Select, Input } from "antd";
-import { getLessonsApi } from "../util/api";
-import { remove as removeDiacritics } from "diacritics";
+import { getLessonsApi, getFiltersApi } from "../util/api";
 import LessonCard from "../components/layout/LessonCard";
-import Fuse from "fuse.js"; // 👈 Thêm Fuse.js
+import { useNavigate } from "react-router-dom";
 
 const { Option } = Select;
 const { Search } = Input;
 
 const HomePage = () => {
   const [lessons, setLessons] = useState([]);
-  const [filteredLessons, setFilteredLessons] = useState([]); // 👈 danh sách sau fuzzy search
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(8);
@@ -18,48 +16,19 @@ const HomePage = () => {
 
   const [subject, setSubject] = useState();
   const [category, setCategory] = useState();
-  const [keyword, setKeyword] = useState(""); // từ khóa fuzzy search
-
-  // danh sách subject cố định
-  const subjects = ["physics", "chemistry", "biology"];
-
-  // category theo từng subject
-  const categories = {
-    physics: ["Điện học", "Điện từ", "Cơ học"],
-    chemistry: ["Cấu trúc nguyên tử", "Liên kết hoá học", "Hữu cơ", "Phản ứng"],
-    biology: ["Tế bào", "Sinh học phân tử", "Chuyển hoá"],
-  };
+  const [keyword, setKeyword] = useState("");
+  const [subjects, setSubjects] = useState([]);
+  const [categories, setCategories] = useState({});
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchLessons = async () => {
       setLoading(true);
       try {
-        const res = await getLessonsApi(currentPage, pageSize, subject, category);
-        const data = res.data || [];
-        setLessons(data);
-  
-        if (keyword.trim() !== "") {
-          // Tạo thêm field bỏ dấu để search
-          const normalizedData = data.map(item => ({
-            ...item,
-            titleNoAccent: removeDiacritics(item.title).toLowerCase(),
-          }));
-  
-          const fuse = new Fuse(normalizedData, {
-            keys: ["titleNoAccent"],
-            threshold: 0.4,
-            distance: 100,
-            ignoreLocation: true,
-            minMatchCharLength: 2,
-          });
-  
-          const result = fuse.search(removeDiacritics(keyword).toLowerCase());
-          setFilteredLessons(result.map(r => r.item));
-          setTotal(result.length);
-        } else {
-          setFilteredLessons(data);
-          setTotal(res.total || data.length);
-        }
+        // truyền thêm keyword vào API
+        const res = await getLessonsApi(currentPage, pageSize, subject, category, keyword);
+        setLessons(res.data || []);
+        setTotal(res.total || 0);
       } catch (error) {
         message.error("Không thể tải danh sách bài học!");
       } finally {
@@ -68,6 +37,24 @@ const HomePage = () => {
     };
     fetchLessons();
   }, [currentPage, pageSize, subject, category, keyword]);
+  useEffect(() => {
+  const fetchFilters = async () => {
+    try {
+      const res = await getFiltersApi();
+      console.log("get-filter raw:", res);
+
+      // Hỗ trợ cả 2 kiểu: có interceptor (res là data) / không interceptor (res.data là data)
+      const payload = res?.data ?? res;
+
+      setSubjects(payload?.subjects || []);
+      setCategories(payload?.categories || {}); // { subject: [cats...] }
+    } catch (err) {
+      console.error("Lỗi gọi API get-filter:", err);
+      message.error("Không thể tải bộ lọc!");
+    }
+  };
+  fetchFilters();
+  }, []);
 
   return (
     <div
@@ -83,12 +70,12 @@ const HomePage = () => {
         title="Danh sách bài học"
         style={{ 
           textAlign: "center", 
-          width: "90%",
+          width: "73%",
           border: "1px solid #3a7d6b",
           borderRadius: "8px"
         }}
         headStyle={{ 
-          background: "#63c9a7",
+          background: "#63c9a7", 
           color: "#fff" 
         }}
       >
@@ -110,11 +97,11 @@ const HomePage = () => {
             style={{ width: 150 }}
             onChange={(value) => {
               if (value === "all") {
-                setSubject(undefined);
-                setCategory(undefined);
+                setSubject(undefined);   // bỏ lọc môn
+                setCategory(undefined);  // bỏ lọc chương luôn
               } else {
                 setSubject(value);
-                setCategory(undefined);
+                setCategory(undefined);  // reset category khi đổi subject
               }
               setCurrentPage(1);
             }}
@@ -133,13 +120,13 @@ const HomePage = () => {
             style={{ width: 150 }}
             onChange={(value) => {
               if (value === "all") {
-                setCategory(undefined);
+                setCategory(undefined); // bỏ lọc chương
               } else {
                 setCategory(value);
               }
               setCurrentPage(1);
             }}
-            disabled={!subject}
+            disabled={!subject} // chưa chọn môn thì disable
           >
             <Option value="all">Tất cả</Option>
             {(categories[subject] || []).map((c) => (
@@ -158,20 +145,20 @@ const HomePage = () => {
           ) : (
             <List
               grid={{ gutter: 16, column: 4 }}
-              dataSource={filteredLessons} 
-              locale={{ emptyText: "Không có bài học nào" }}
+              dataSource={lessons}
               renderItem={(item) => (
                 <List.Item key={item.id}>
-                  <LessonCard
-                    title={item.title}
-                    thumbnail={
-                      item.thumbnail ||
-                      "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTgh394OQoFRXqpvGzCs27NNoLCqMGhTjgQGw&s"
-                    }
-                  />
+                  <div onClick={() => navigate(`/lessondetail/${item.id}`)} style={{ cursor: "pointer" }}>
+                    <LessonCard
+                      id={item.id}
+                      title={item.title}
+                      thumbnail={item.thumbnail}
+                      price={item.price}
+                      viewCount={item.viewCount}
+                    />
+                  </div>
                 </List.Item>
               )}
-              style={{ minHeight: 550 }}
             />
           )}
         </div>

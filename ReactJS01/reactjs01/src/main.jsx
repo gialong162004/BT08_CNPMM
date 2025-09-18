@@ -10,7 +10,10 @@ import RegisterPage from './pages/register.jsx';
 import UserPage from './pages/user.jsx';
 import HomePage from './pages/home.jsx';
 import LoginPage from './pages/login.jsx';
+import LessonDetail from './pages/LessonDetail.jsx';
 import { AuthWrapper } from './components/context/auth.context.jsx';
+import 'bootstrap/dist/css/bootstrap.min.css';
+
 const router = createBrowserRouter ([
   {
     path: "/",
@@ -34,6 +37,10 @@ const router = createBrowserRouter ([
     path: "login",
     element: <LoginPage />
   },
+  {
+    path: "lessondetail/:id",
+    element: <LessonDetail/>
+  }
 ]);
 ReactDOM.createRoot(document.getElementById('root')).render (
   // <React.StrictMode>
