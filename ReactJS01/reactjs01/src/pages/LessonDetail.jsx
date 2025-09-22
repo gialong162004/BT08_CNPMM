@@ -11,7 +11,7 @@ import {
   ListGroup,
   Form,
 } from "react-bootstrap";
-import { getLessonDetailApi, getSimilarLessonsApi } from "../util/api";
+import { getLessonDetailApi, getSimilarLessonsApi, addCommentApi, getCommentApi } from "../util/api";
 import Header from "../components/layout/header";
 
 const LessonDetail = () => {
@@ -24,6 +24,8 @@ const LessonDetail = () => {
   const [newComment, setNewComment] = useState("");
   const [relatedLessons, setRelatedLessons] = useState([]);
   const [showComments, setShowComments] = useState(false);
+  const [loadingComments, setLoadingComments] = useState(false);
+
 
 
   useEffect(() => {
@@ -34,11 +36,11 @@ const LessonDetail = () => {
         const res = await getLessonDetailApi(id);
         setLesson(res.data);
 
-        // demo comments & related lessons (sau này thay API thật)
-        setComments([
-          { id: 1, user: "Nguyễn Văn A", content: "Bài học rất bổ ích!" },
-          { id: 2, user: "Trần Thị B", content: "Giảng dễ hiểu, mong có thêm ví dụ." },
-        ]);
+        // gọi API thật để lấy comments
+        const commentRes = await getCommentApi(id);
+        setComments(commentRes.data.comments || []); // luôn là array
+
+        // gọi API lấy bài học liên quan
         const relRes = await getSimilarLessonsApi(id, 6);
         setRelatedLessons(relRes.data);
       } catch (err) {
@@ -48,17 +50,40 @@ const LessonDetail = () => {
       }
     };
     fetchLesson();
+
+    const fetchComments = async () => {
+      setLoadingComments(true);
+      try {
+        const res = await getCommentApi(id);
+        setComments(res.data.comments || []);
+      } catch (err) {
+        console.error("Lỗi khi tải bình luận:", err);
+      } finally {
+        setLoadingComments(false);
+      }
+    };
+    fetchComments();
   }, [id]);
 
-  const handleAddComment = () => {
+  const handleAddComment = async () => {
     if (!newComment.trim()) return;
-    const newCmt = {
-      id: Date.now(),
-      user: "Bạn",
-      content: newComment,
-    };
-    setComments([newCmt, ...comments]);
-    setNewComment("");
+  
+    try {
+      const userId = localStorage.getItem("id");
+      const userName = localStorage.getItem("name");
+  
+      // Gửi bình luận mới
+      await addCommentApi(id, userId, newComment);
+  
+      // Lấy danh sách bình luận mới nhất từ server
+      const res = await getCommentApi(id);
+      setComments(res.data.comments || []);
+  
+      setNewComment("");
+    } catch (err) {
+      console.error("Lỗi khi thêm bình luận:", err);
+      alert("Không thể gửi bình luận!");
+    }
   };
 
   if (loading) {
